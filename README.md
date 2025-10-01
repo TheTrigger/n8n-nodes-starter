@@ -1,48 +1,182 @@
-![Banner image](https://user-images.githubusercontent.com/10284570/173569848-c624317f-42b1-45a6-ab09-f0ea3c247648.png)
+# n8n-nodes-voicenet
 
-# n8n-nodes-starter
+VoiceNet nodes for n8n - Build AI-powered voice call workflows with OpenAI Realtime API integration.
 
-This repo contains example nodes to help you get started building your own custom integrations for [n8n](https://n8n.io). It includes the node linter and other dependencies.
+## Features
 
-To make your custom node available to the community, you must create it as an npm package, and [submit it to the npm registry](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry).
+- 🎙️ **Voice Agent**: AI voice agent with tool calling capabilities
+- 📞 **Call Management**: Answer, play audio, and transfer calls
+- 🔧 **Tool Integration**: Connect any n8n AI tool to your voice agent
+- 🌐 **WebSocket Events**: Real-time call event handling
+- 🔐 **Secure Webhooks**: HMAC signature verification
 
-If you would like your node to be available on n8n cloud you can also [submit your node for verification](https://docs.n8n.io/integrations/creating-nodes/deploy/submit-community-nodes/).
+## Installation
 
-## Prerequisites
+Install in your n8n instance:
 
-You need the following installed on your development machine:
+```bash
+npm install n8n-nodes-voicenet
+```
 
-* [git](https://git-scm.com/downloads)
-* Node.js and npm. Minimum version Node 20. You can find instructions on how to install both using nvm (Node Version Manager) for Linux, Mac, and WSL [here](https://github.com/nvm-sh/nvm). For Windows users, refer to Microsoft's guide to [Install NodeJS on Windows](https://docs.microsoft.com/en-us/windows/dev-environment/javascript/nodejs-on-windows).
-* Install n8n with:
-  ```
-  npm install n8n -g
-  ```
-* Recommended: follow n8n's guide to [set up your development environment](https://docs.n8n.io/integrations/creating-nodes/build/node-development-environment/).
+Or for development:
 
-## Using this starter
+```bash
+git clone https://github.com/yourusername/n8n-nodes-voicenet.git
+cd n8n-nodes-voicenet
+npm install
+npm run build
+npm link
+```
 
-These are the basic steps for working with the starter. For detailed guidance on creating and publishing nodes, refer to the [documentation](https://docs.n8n.io/integrations/creating-nodes/).
+Then in your n8n installation:
+```bash
+npm link n8n-nodes-voicenet
+n8n start
+```
 
-1. [Generate a new repository](https://github.com/n8n-io/n8n-nodes-starter/generate) from this template repository.
-2. Clone your new repo:
-   ```
-   git clone https://github.com/<your organization>/<your-repo-name>.git
-   ```
-3. Run `npm i` to install dependencies.
-4. Open the project in your editor.
-5. Browse the examples in `/nodes` and `/credentials`. Modify the examples, or replace them with your own nodes.
-6. Update the `package.json` to match your details.
-7. Run `npm run lint` to check for errors or `npm run lintfix` to automatically fix errors when possible.
-8. Test your node locally. Refer to [Run your node locally](https://docs.n8n.io/integrations/creating-nodes/test/run-node-locally/) for guidance.
-9. Replace this README with documentation for your node. Use the [README_TEMPLATE](README_TEMPLATE.md) to get started.
-10. Update the LICENSE file to use your details.
-11. [Publish](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry) your package to npm.
+## Configuration
 
-## More information
+### Credentials
+Create a `VoiceNet API` credential with:
+- **Base URL**: Your VoiceNet backend API endpoint (e.g., `https://api.voicenet.com`)
+- **API Key**: Your API key for authentication
+- **Signing Secret**: (Optional) For HMAC webhook verification
 
-Refer to our [documentation on creating nodes](https://docs.n8n.io/integrations/creating-nodes/) for detailed information on building your own nodes.
+### Backend URL Configuration
+The WebSocket URL for real-time communication is automatically derived from the Base URL in credentials:
+- `https://api.voicenet.com` → `wss://api.voicenet.com/realtime`
+- `http://localhost:8080` → `ws://localhost:8080/realtime`
+
+You can override this by setting the Runtime Base URL field in the Voice Agent node if needed.
+
+## Nodes
+
+### 1. Call Inbound Trigger
+Webhook trigger for incoming calls.
+
+**Configuration:**
+- **DID Filter**: Optional phone number filter (e.g., +1234567890)
+
+**Outputs:**
+- Call metadata including callId, from, to, and custom data
+
+### 2. Call: Answer
+Answers an incoming call.
+
+**Inputs:**
+- **Call ID**: The ID of the call to answer
+
+**Outputs:**
+- **Answered**: Success response
+- **Error**: Error details if failed
+
+### 3. Call: Play
+Play audio in an active call (non-blocking).
+
+**Inputs:**
+- **Call ID**: The call to play audio in
+- **Source Type**: URL, File Upload, or Library Asset
+- **Audio URL**: Direct URL to audio file (WAV, MP3)
+- **Barge-In**: Allow caller to interrupt
+
+**Outputs:**
+- **Play Started**: Confirmation with playId
+- **Error**: Error details if failed
+
+### 4. Voice Agent
+AI-powered voice agent with tool orchestration.
+
+**Inputs:**
+- **Main**: Call data with callId
+- **Tools**: AI tools connected via tool port
+
+**Configuration:**
+- **Base Prompt**: System instructions for the AI
+- **User Instructions**: Additional context
+- **Locale**: Language locale (e.g., it-IT)
+- **Barge-In**: Allow interruptions
+
+**Outputs:**
+1. **Tool Call**: When AI invokes a tool
+2. **Call Transferred**: When call is transferred
+3. **Call Ended**: When call ends
+4. **Error**: Error events
+
+### 5. Transfer Call Tool
+AI tool for transferring calls.
+
+**Features:**
+- Compatible with Voice Agent tool port
+- Optional announcement before transfer
+- Returns tool result to Voice Agent
+
+## Example Workflow
+
+```
+[Call Inbound Trigger]
+         ↓
+    [Call: Answer]
+         ↓
+    [Voice Agent] ←→ [Transfer Call Tool]
+         ↓              [Google Calendar Tool]
+    (4 outputs)         [Custom API Tool]
+```
+
+## Backend Requirements
+
+The VoiceNet backend must implement:
+
+### Webhook Endpoints
+- `POST /webhook/register` - Register webhook subscription
+- `DELETE /webhook/unregister` - Remove subscription
+
+### Call Control API
+- `POST /calls/{callId}/answer` - Answer call
+- `POST /calls/{callId}/play` - Play audio
+- `POST /calls/{callId}/say` - Text-to-speech
+- `POST /calls/{callId}/transfer` - Transfer call
+- `GET /media/assets` - List library assets
+
+### Real-time WebSocket
+- `wss://backend/realtime` - WebSocket endpoint
+- Event types: `tool.call`, `call.transferred`, `call.ended`, `error`
+
+### Session Management
+- `POST /session.create` - Create AI session with tools
+
+## Development
+
+### Build from source
+```bash
+npm install
+npm run build
+```
+
+### Run tests
+```bash
+npm test
+```
+
+### Lint code
+```bash
+npm run lint
+npm run lintfix
+```
+
+## TODOs
+
+- [ ] HMAC signature verification in trigger
+- [ ] File upload support in Call: Play
+- [ ] WebSocket reconnection with exponential backoff
+- [ ] Persistent WebSocket across workflow executions
+- [ ] Event deduplication in trigger
+- [ ] Additional call control operations (hold, mute, record)
 
 ## License
 
-[MIT](https://github.com/n8n-io/n8n-nodes-starter/blob/master/LICENSE.md)
+MIT
+
+## Support
+
+- [GitHub Issues](https://github.com/yourusername/n8n-nodes-voicenet/issues)
+- [Documentation](https://docs.voicenet.com)
